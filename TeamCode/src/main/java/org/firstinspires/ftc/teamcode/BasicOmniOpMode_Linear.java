@@ -227,9 +227,9 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         }
 
         leftFrontDrive.setPower(leftFrontPower);
-        leftBackDrive.setPower(leftBackPower);
-        rightFrontDrive.setPower(leftFrontPower);
-        rightBackDrive.setPower(leftBackPower);
+        leftBackDrive.setPower(leftFrontPower);
+        rightFrontDrive.setPower(rightFrontPower);
+        rightBackDrive.setPower(rightFrontPower);
     }
 
     /**
