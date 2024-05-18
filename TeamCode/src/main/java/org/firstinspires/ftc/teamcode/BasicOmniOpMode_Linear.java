@@ -40,107 +40,67 @@ import com.qualcomm.robotcore.util.Range;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
-/*
- * This file contains an example of a Linear "OpMode".
- * An OpMode is a 'program' that runs in either the autonomous or the teleop period of an FTC match.
- * The names of OpModes appear on the menu of the FTC Driver Station.
- * When a selection is made from the menu, the corresponding OpMode is executed.
- *
- * This particular OpMode illustrates driving a 4-motor Omni-Directional (or Holonomic) robot.
- * This code will work with either a Mecanum-Drive or an X-Drive train.
- * Both of these drives are illustrated at https://gm0.org/en/latest/docs/robot-design/drivetrains/holonomic.html
- * Note that a Mecanum drive must display an X roller-pattern when viewed from above.
- *
- * Also note that it is critical to set the correct rotation direction for each motor.  See details below.
- *
- * Holonomic drives provide the ability for the robot to move in three axes (directions) simultaneously.
- * Each motion axis is controlled by one Joystick axis.
- *
- * 1) Axial:    Driving forward and backward               Left-joystick Forward/Backward
- * 2) Lateral:  Strafing right and left                     Left-joystick Right and Left
- * 3) Yaw:      Rotating Clockwise and counter clockwise    Right-joystick Right and Left
- *
- * This code is written assuming that the right-side motors need to be reversed for the robot to drive forward.
- * When you first test your robot, if it moves backward when you push the left stick forward, then you must flip
- * the direction of all 4 motors (see code below).
- *
- * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
- * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list
- */
-
-@TeleOp(name="Basic: Omni Linear OpMode", group="Linear OpMode")
+@TeleOp(name="Manual default driving", group="Linear OpMode")
 //@Disabled
 public class BasicOmniOpMode_Linear extends LinearOpMode {
-
-    // Declare OpMode members for each of the 4 motors.
     private final ElapsedTime runtime = new ElapsedTime();
 
-    DcMotor leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
-    DcMotor leftBackDrive = hardwareMap.get(DcMotor.class, "left_back_drive");
-    DcMotor rightFrontDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
-    DcMotor rightBackDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
-    private IMU imu         = null;      // Control/Expansion Hub IMU
-    static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable
-    static final double     P_TURN_GAIN            = 0.02;     // Larger is more responsive, but also less stable
+    // Robot configuration
+    private IMU     imu             = null;
+    private DcMotor leftFrontDrive  = null;
+    private DcMotor leftBackDrive   = null;
+    private DcMotor rightFrontDrive = null;
+    private DcMotor rightBackDrive  = null;
 
+    // Default values
+    static final double     P_DRIVE_GAIN            = 0.03;     // Larger is more responsive, but also less stable
+    static final double     P_TURN_GAIN             = 0.02;     // Larger is more responsive, but also less stable
     static final double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
-    // Requiring more accuracy (a smaller number) will often make the turn take longer to get into the final position.
-    // Calculate the COUNTS_PER_INCH for your specific drive train.
-    // Go to your motor vendor website to determine your motor's COUNTS_PER_MOTOR_REV
-    // For external drive gearing, set DRIVE_GEAR_REDUCTION as needed.
-    // For example, use a value of 2.0 for a 12-tooth spur gear driving a 24-tooth spur gear.
-    // This is gearing DOWN for less speed and more torque.
-    // For gearing UP, use a gear ratio less than 1.0. Note this will affect the direction of wheel rotation.
     static final double     COUNTS_PER_MOTOR_REV    = 537.7 ;   // eg: GoBILDA 312 RPM Yellow Jacket
     static final double     DRIVE_GEAR_REDUCTION    = 1.0 ;     // No External Gearing.
-    static final double     WHEEL_DIAMETER_INCHES   = 4.0 ;     // For figuring circumference
-    static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
-            (WHEEL_DIAMETER_INCHES * 3.1415);
+    static final double     WHEEL_DIAMETER_INCHES   = 3.8 ;     // For figuring circumference
+    static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) / (WHEEL_DIAMETER_INCHES * 3.1415);
+    static final double     MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
+    static final double     MAX_TURN_SPEED          = 0.8 ;     // Max Turn speed to limit turn rate
 
-    private double  turnSpeed     = 0;
-    private double  driveSpeed    = 0;
-    final double     DRIVE_SPEED             = 0.4;     // Max driving speed for better distance accuracy.
-    final double     TURN_SPEED              = 0.2;     // Max Turn speed to limit turn rate
-    private double  leftSpeed     = 0;
-    private double  rightSpeed    = 0;
-    private int     leftTarget    = 0;
-    private int     rightTarget   = 0;
-    private double  targetHeading = 0;
-    private double  headingError  = 0;
+    // Execution variables
+    private double  driveSpeed      = 0;
+    private double  turnSpeed       = 0;
+    private int     leftTarget      = 0;
+    private int     rightTarget     = 0;
+    private double  targetHeading   = 0;
+    private double  headingError    = 0;
+    private double  leftFrontPower  = 0;
+    private double  rightFrontPower = 0;
+    private double  leftBackPower   = 0;
+    private double  rightBackPower  = 0;
+    double          axial           = 0;  // Note: pushing stick forward gives negative value
+    double          lateral         = 0;
+    double          yaw             = 0;
 
     @Override
     public void runOpMode() {
-        // ########################################################################################
-        // !!!            IMPORTANT Drive Information. Test your motor directions.            !!!!!
-        // ########################################################################################
-        // Most robots need the motors on one side to be reversed to drive forward.
-        // The motor reversals shown here are for a "direct drive" robot (the wheels turn the same direction as the motor shaft)
-        // If your robot has additional gear reductions or uses a right-angled drive, it's important to ensure
-        // that your motors are turning in the correct direction.  So, start out with the reversals here, BUT
-        // when you first test your robot, push the left joystick forward and observe the direction the wheels turn.
-        // Reverse the direction (flip FORWARD <-> REVERSE ) of any wheel that runs backward
-        // Keep testing until ALL the wheels move the robot forward when you push the left joystick forward.
+        // Initialize the motor configuration
+        leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
+        leftBackDrive = hardwareMap.get(DcMotor.class, "left_back_drive");
+        rightFrontDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
+        rightBackDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
+
         leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
         leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
         rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
         rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
 
-        /* The next two lines define Hub orientation.
-         * The Default Orientation (shown) is when a hub is mounted horizontally with the printed logo pointing UP and the USB port pointing FORWARD.
-         *
-         * To Do:  EDIT these two lines to match YOUR mounting configuration.
-         */
+        // Initialize the IMU configuration
         RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.UP;
         RevHubOrientationOnRobot.UsbFacingDirection  usbDirection  = RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
         RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
 
-        // Now initialize the IMU with this mounting orientation
-        // This sample expects the IMU to be in a REV Hub and named "imu".
         imu = hardwareMap.get(IMU.class, "imu");
         imu.initialize(new IMU.Parameters(orientationOnRobot));
 
         // Wait for the game to start (driver presses PLAY)
-        telemetry.addData("Status", "Initialized");
+        telemetry.addLine("Ready to go, push INIT to start");
         telemetry.update();
 
         waitForStart();
@@ -150,23 +110,23 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         while (opModeIsActive()) {
             double max;
 
-            // POV Mode uses left joystick to go forward & strafe, and right joystick to rotate.
-            double axial   = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
-            double lateral =  gamepad1.left_stick_x;
-            double yaw     =  gamepad1.right_stick_x;
-            boolean forward = gamepad1.dpad_up;
-            boolean backward = gamepad1.dpad_down;
-            boolean left = gamepad1.dpad_left;
-            boolean right = gamepad1.dpad_right;
-            boolean moveForward = gamepad1.a;
-            boolean moveBackward = gamepad1.b;
+            // Get values from the controller.
+            axial   = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
+            lateral =  gamepad1.left_stick_x;
+            yaw     =  gamepad1.right_stick_x;
+            boolean dpad_up     = gamepad1.dpad_up;
+            boolean dpad_down   = gamepad1.dpad_down;
+            boolean dpad_left   = gamepad1.dpad_left;
+            boolean dpad_right  = gamepad1.dpad_right;
+            boolean gamepad_a   = gamepad1.a;
+            boolean gamepad_b   = gamepad1.b;
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
-            double leftFrontPower  = axial + lateral + yaw;
-            double rightFrontPower = axial - lateral - yaw;
-            double leftBackPower   = axial - lateral + yaw;
-            double rightBackPower  = axial + lateral - yaw;
+            leftFrontPower  = axial + lateral + yaw;
+            rightFrontPower = axial - lateral - yaw;
+            leftBackPower   = axial - lateral + yaw;
+            rightBackPower  = axial + lateral - yaw;
 
             // Normalize the values so no wheel power exceeds 100%
             // This ensures that the robot maintains the desired motion.
@@ -181,61 +141,35 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
                 rightBackPower  /= max;
             }
 
-            // This is test code:
-            //
-            // Uncomment the following code to test your motor directions.
-            // Each button should make the corresponding motor run FORWARD.
-            //   1) First get all the motors to take to correct positions on the robot
-            //      by adjusting your Robot Configuration if necessary.
-            //   2) Then make sure they run in the correct direction by modifying the
-            //      the setDirection() calls above.
-            // Once the correct motors move in the correct direction re-comment this code.
-
-            /*
-            leftFrontPower  = gamepad1.x ? 1.0 : 0.0;  // X gamepad
-            leftBackPower   = gamepad1.a ? 1.0 : 0.0;  // A gamepad
-            rightFrontPower = gamepad1.y ? 1.0 : 0.0;  // Y gamepad
-            rightBackPower  = gamepad1.b ? 1.0 : 0.0;  // B gamepad
-            */
-
             // Send calculated power to wheels
             leftFrontDrive.setPower(leftFrontPower);
             rightFrontDrive.setPower(rightFrontPower);
             leftBackDrive.setPower(leftBackPower);
             rightBackDrive.setPower(rightBackPower);
 
-            // Show the elapsed game time and wheel power.
-            telemetry.addData("-Status", "Run Time: " + runtime);
-            telemetry.addData("Front left/Right", "%4.2f, %4.2f", leftFrontPower, rightFrontPower);
-            telemetry.addData("Back  left/Right", "%4.2f, %4.2f", leftBackPower, rightBackPower);
-            telemetry.update();
-
-
             // gyro turns
-            if(forward)
-                turnToHeading( TURN_SPEED, 0.0);
-            if(backward)
-                turnToHeading( TURN_SPEED, 180.0);
-            if(left)
-                turnToHeading( TURN_SPEED+1, -90.0);
-            if(right)
-                turnToHeading( TURN_SPEED, 90.0);
+            if(dpad_up)
+                turnToHeading(0.0);
+            if(dpad_down)
+                turnToHeading(180.0);
+            if(dpad_left)
+                turnToHeading(90.0);
+            if(dpad_right)
+                turnToHeading(-90.0);
 
-            // predetermined strait
-            if(moveForward)
-                driveStraight(DRIVE_SPEED, 24.0, getHeading());
-            if(moveBackward)
-                driveStraight(DRIVE_SPEED, -24.0, getHeading());
+            sendTelemetry();
         }
     }
 
-    private void turnToHeading(double maxTurnSpeed, double heading) {
+    private void turnToHeading(double heading) {
+        double maxTurnSpeed = MAX_TURN_SPEED;
 
         // Run getSteeringCorrection() once to pre-calculate the current error
         getSteeringCorrection(heading, P_DRIVE_GAIN);
 
         // keep looping while we are still active, and not on heading.
-        while (opModeIsActive() && (Math.abs(headingError) > HEADING_THRESHOLD)) {
+        while (opModeIsActive() && (Math.abs(headingError) > HEADING_THRESHOLD)
+                && (gamepad1.left_stick_y == 0) && (gamepad1.left_stick_x == 0) && (gamepad1.right_stick_x == 0)) {
 
             // Determine required steering to keep on heading
             turnSpeed = getSteeringCorrection(heading, P_TURN_GAIN);
@@ -247,7 +181,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             moveRobot(0, turnSpeed);
 
             // Display drive status for the driver.
-            sendTelemetry(false);
+            sendTelemetry();
         }
 
         // Stop all motion;
@@ -272,40 +206,38 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         driveSpeed = drive;     // save this value as a class member so it can be used by telemetry.
         turnSpeed  = turn;      // save this value as a class member so it can be used by telemetry.
 
-        leftSpeed  = drive - turn;
-        rightSpeed = drive + turn;
+        leftFrontPower  = drive - turn;
+        rightFrontPower = drive + turn;
 
         // Scale speeds down if either one exceeds +/- 1.0;
-        double max = Math.max(Math.abs(leftSpeed), Math.abs(rightSpeed));
+        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
         if (max > 1.0)
         {
-            leftSpeed /= max;
-            rightSpeed /= max;
+            leftFrontPower /= max;
+            rightFrontPower /= max;
         }
 
-        leftFrontDrive.setPower(leftSpeed);
-        leftBackDrive.setPower(leftSpeed);
-        rightFrontDrive.setPower(rightSpeed);
-        rightBackDrive.setPower(rightSpeed);
-    }
+        // Normalize the values so no wheel power exceeds 100%
+        // This ensures that the robot maintains the desired motion.
+        max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
 
+        if (max > 1.0) {
+            leftFrontPower  /= max;
+            rightFrontPower /= max;
+        }
+
+        leftFrontDrive.setPower(leftFrontPower);
+        leftBackDrive.setPower(leftBackPower);
+        rightFrontDrive.setPower(leftFrontPower);
+        rightBackDrive.setPower(leftBackPower);
+    }
 
     /**
      *  Drive in a straight line, on a fixed compass heading (angle), based on encoder counts.
-     *  Move will stop if either of these conditions occur:
-     *  1) Move gets to the desired position
-     *  2) Driver stops the OpMode running.
-     *
-     * @param maxDriveSpeed MAX Speed for forward/rev motion (range 0 to +1.0) .
      * @param distance   Distance (in inches) to move from current position.  Negative distance means move backward.
-     * @param heading      Absolute Heading Angle (in Degrees) relative to last gyro reset.
-     *                   0 = fwd. +ve is CCW from fwd. -ve is CW from forward.
-     *                   If a relative angle is required, add/subtract from the current robotHeading.
-     */
-    public void driveStraight(double maxDriveSpeed,
-                              double distance,
-                              double heading) {
-
+     * @param heading    Absolute Heading Angle (in Degrees) relative to last gyro reset.
+    */
+    public void driveStraight(double distance, double heading) {
         // Ensure that the OpMode is still active
         if (opModeIsActive()) {
 
@@ -321,14 +253,11 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             leftFrontDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
             rightFrontDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
 
-            // Set the required driving speed  (must be positive for RUN_TO_POSITION)
             // Start driving straight, and then enter the control loop
-            maxDriveSpeed = Math.abs(maxDriveSpeed);
-            moveRobot(maxDriveSpeed, 0);
+            moveRobot(MAX_DRIVE_SPEED, 0);
 
             // keep looping while we are still active, and BOTH motors are running.
-            while (opModeIsActive() &&
-                    (leftFrontDrive.isBusy() && rightFrontDrive.isBusy())) {
+            while (opModeIsActive() && (leftFrontDrive.isBusy() && rightFrontDrive.isBusy())) {
 
                 // Determine required steering to keep on heading
                 turnSpeed = getSteeringCorrection(heading, P_DRIVE_GAIN);
@@ -341,7 +270,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
                 moveRobot(driveSpeed, turnSpeed);
 
                 // Display drive status for the driver.
-                sendTelemetry(true);
+                sendTelemetry();
             }
 
             // Stop all motion & Turn off RUN_TO_POSITION
@@ -353,23 +282,14 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
     /**
      *  Display the various control parameters while driving
-     *
-     * @param straight  Set to true if we are driving straight, and the encoder positions should be included in the telemetry.
      */
-    private void sendTelemetry(boolean straight) {
-
-        if (straight) {
-            telemetry.addData("Motion", "Drive Straight");
-            telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
-            telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(),
-                    rightFrontDrive.getCurrentPosition());
-        } else {
-            telemetry.addData("Motion", "Turning");
-        }
-
-        telemetry.addData("Heading- Target : Current", "%5.2f : %5.0f", targetHeading, getHeading());
-        telemetry.addData("Error  : Steer Pwr",  "%5.1f : %5.1f", headingError, turnSpeed);
-        telemetry.addData("Wheel Speeds L : R", "%5.2f : %5.2f", leftSpeed, rightSpeed);
+    private void sendTelemetry() {
+        telemetry.addData("Status", "Run Time: " + runtime);
+        telemetry.addData("Heading:  Target/Current", "%5.1f, %5.1f", targetHeading, getHeading());
+        telemetry.addData("Front Left/Right", "%4.1f, %4.1f", leftFrontPower, rightFrontPower);
+        telemetry.addData("Back  Left/Right", "%4.1f, %4.1f", leftBackPower, rightBackPower);
+        //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
+        //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
     }
 
