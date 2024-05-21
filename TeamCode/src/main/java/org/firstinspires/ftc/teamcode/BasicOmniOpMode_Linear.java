@@ -50,10 +50,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
     // Robot configuration
     private IMU     imu             = null;
-    private DcMotor leftFrontDrive  = null;
-    private DcMotor leftBackDrive   = null;
-    private DcMotor rightFrontDrive = null;
-    private DcMotor rightBackDrive  = null;
+    private final DcMotor [] motorLocations = new DcMotor[4];
 
     // Adjustable default values
     public static double    MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
@@ -75,14 +72,8 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private double  turnSpeed       = 0;
     private double  targetHeading   = 0;
     private double  headingError    = 0;
-    private double  leftFrontPower  = 0;
-    private double  rightFrontPower = 0;
-    private double  leftBackPower   = 0;
-    private double  rightBackPower  = 0;
-    private double  prevLeftFrontPower  = 0;
-    private double  prevRightFrontPower = 0;
-    private double  prevLeftBackPower   = 0;
-    private double  prevRightBackPower  = 0;
+    private final double [] wheelPower = new double[4];
+    private final double [] prevWheelPower = new double[4];
     double          axial           = 0;  // Note: pushing stick forward gives negative value
     double          lateral         = 0;
     double          yaw             = 0;
@@ -90,18 +81,19 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     @Override
     public void runOpMode() {
         FtcDashboard dashboard = FtcDashboard.getInstance();
-        telemetry = dashboard.getTelemetry();
+        telemetry = dashboard.getTelemetry();   // This makes the telemetry go to the FTC Dashboard
+                                                // Disable it to make telemetry go to the Driver Hub
 
         // Initialize the motor configuration
-        leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
-        leftBackDrive = hardwareMap.get(DcMotor.class, "left_back_drive");
-        rightFrontDrive = hardwareMap.get(DcMotor.class, "right_front_drive");
-        rightBackDrive = hardwareMap.get(DcMotor.class, "right_back_drive");
+        motorLocations[0] = hardwareMap.get(DcMotor.class, "left_front_drive");
+        motorLocations[1] = hardwareMap.get(DcMotor.class, "left_back_drive");
+        motorLocations[2] = hardwareMap.get(DcMotor.class, "right_front_drive");
+        motorLocations[3] = hardwareMap.get(DcMotor.class, "right_back_drive");
 
-        leftFrontDrive.setDirection(DcMotor.Direction.REVERSE);
-        leftBackDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightFrontDrive.setDirection(DcMotor.Direction.FORWARD);
-        rightBackDrive.setDirection(DcMotor.Direction.FORWARD);
+        motorLocations[0].setDirection(DcMotor.Direction.REVERSE);
+        motorLocations[1].setDirection(DcMotor.Direction.REVERSE);
+        motorLocations[2].setDirection(DcMotor.Direction.FORWARD);
+        motorLocations[3].setDirection(DcMotor.Direction.FORWARD);
 
         // Initialize the IMU configuration
         RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.UP;
@@ -131,27 +123,18 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
-            leftFrontPower  = axial + lateral + yaw;
-            rightFrontPower = axial - lateral - yaw;
-            leftBackPower   = axial - lateral + yaw;
-            rightBackPower  = axial + lateral - yaw;
+            wheelPower[0]  = axial + lateral + yaw;
+            wheelPower[1] = axial - lateral - yaw;
+            wheelPower[2]   = axial - lateral + yaw;
+            wheelPower[3]  = axial + lateral - yaw;
 
-            leftFrontPower = adjustPower(prevLeftFrontPower, leftFrontPower);
-            rightFrontPower = adjustPower(prevRightFrontPower, rightFrontPower);
-            leftBackPower = adjustPower(prevLeftBackPower, leftBackPower);
-            rightBackPower = adjustPower(prevRightBackPower, rightBackPower);
-
-            // Save the current power level for the next loop
-            prevLeftFrontPower = leftFrontPower;
-            prevRightFrontPower = rightFrontPower;
-            prevLeftBackPower = leftBackPower;
-            prevRightBackPower = rightBackPower;
+            // Smoothen the wheel power to make the robot run nicely
+            smoothenWheelPower();
 
             // Send calculated power to wheels
-            leftFrontDrive.setPower(leftFrontPower);
-            rightFrontDrive.setPower(rightFrontPower);
-            leftBackDrive.setPower(leftBackPower);
-            rightBackDrive.setPower(rightBackPower);
+            for(int i = 0; i < wheelPower.length; i++) {
+                motorLocations[i].setPower(wheelPower[i]);
+            }
 
             // gyro turns
             if(dpad_up)
@@ -169,24 +152,26 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     }
 
     // Function to gradually adjust current power towards target power
-    private double adjustPower(double currentPower, double targetPower) {
-        if (currentPower < targetPower) {
-            currentPower += MAX_POWER_DIFFERENCE;
-            if (currentPower > targetPower) {
-                currentPower = targetPower;
+    private void smoothenWheelPower() {
+        for(int i = 0; i < 4; i++) {
+            if (prevWheelPower[i] < wheelPower[i]) {
+                prevWheelPower[i] += MAX_POWER_DIFFERENCE;
+                if (prevWheelPower[i] < wheelPower[i]) {
+                    wheelPower[i] = prevWheelPower[i];
+                }
+            } else if (prevWheelPower[i] > wheelPower[i]) {
+                prevWheelPower[i] -= MAX_POWER_DIFFERENCE;
+                if (prevWheelPower[i] > wheelPower[i]) {
+                    wheelPower[i] = prevWheelPower[i];
+                }
             }
-        } else if (currentPower > targetPower) {
-            currentPower -= MAX_POWER_DIFFERENCE;
-            if (currentPower < targetPower) {
-                currentPower = targetPower;
-            }
+
+            // If the power is greater than 1, set it to 1
+            if(wheelPower[i] > 1.0)
+                wheelPower[i] = 1.0;
+
+            prevWheelPower[i] = wheelPower[i];
         }
-
-        // If the power is greater than 1, set it to 1
-        if(currentPower > 1.0)
-            currentPower = 1.0;
-
-        return currentPower;
     }
 
     private void turnToHeading(double heading) {
@@ -236,30 +221,29 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         driveSpeed = drive;     // save this value as a class member so it can be used by telemetry.
         turnSpeed  = turn;      // save this value as a class member so it can be used by telemetry.
 
-        leftFrontPower  = drive - turn;
-        rightFrontPower = drive + turn;
+        wheelPower[0]  = drive - turn;
+        wheelPower[1] = drive + turn;
 
         // Scale speeds down if either one exceeds +/- 1.0;
-        double max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
+        double max = Math.max(Math.abs(wheelPower[0]), Math.abs(wheelPower[1]));
         if (max > 1.0)
         {
-            leftFrontPower /= max;
-            rightFrontPower /= max;
+            wheelPower[0] /= max;
+            wheelPower[1] /= max;
         }
 
         // Normalize the values so no wheel power exceeds 100%
         // This ensures that the robot maintains the desired motion.
-        max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
+        max = Math.max(Math.abs(wheelPower[0]), Math.abs(wheelPower[1]));
 
         if (max > 1.0) {
-            leftFrontPower  /= max;
-            rightFrontPower /= max;
+            wheelPower[0]  /= max;
+            wheelPower[1] /= max;
         }
 
-        leftFrontDrive.setPower(leftFrontPower);
-        leftBackDrive.setPower(leftFrontPower);
-        rightFrontDrive.setPower(rightFrontPower);
-        rightBackDrive.setPower(rightFrontPower);
+        for(int i = 0; i < motorLocations.length; i++) {
+            motorLocations[0].setPower(wheelPower[0]);
+        }
     }
 
     /**
@@ -273,21 +257,21 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             // Determine new target position, and pass to motor controller
             int moveCounts = (int)(distance * COUNTS_PER_INCH);
-            int leftTarget = leftFrontDrive.getCurrentPosition() + moveCounts;
-            int rightTarget = rightFrontDrive.getCurrentPosition() + moveCounts;
+            int leftTarget = motorLocations[0].getCurrentPosition() + moveCounts;
+            int rightTarget = motorLocations[1].getCurrentPosition() + moveCounts;
 
             // Set Target FIRST, then turn on RUN_TO_POSITION
-            leftFrontDrive.setTargetPosition(leftTarget);
-            rightFrontDrive.setTargetPosition(rightTarget);
+            motorLocations[0].setTargetPosition(leftTarget);
+            motorLocations[1].setTargetPosition(rightTarget);
 
-            leftFrontDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            rightFrontDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motorLocations[0].setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            motorLocations[1].setMode(DcMotor.RunMode.RUN_TO_POSITION);
 
             // Start driving straight, and then enter the control loop
             moveRobot(MAX_DRIVE_SPEED, 0);
 
             // keep looping while we are still active, and BOTH motors are running.
-            while (opModeIsActive() && (leftFrontDrive.isBusy() && rightFrontDrive.isBusy())) {
+            while (opModeIsActive() && (motorLocations[0].isBusy() && motorLocations[1].isBusy())) {
 
                 // Determine required steering to keep on heading
                 turnSpeed = getSteeringCorrection(heading, P_DRIVE_GAIN);
@@ -305,8 +289,8 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             // Stop all motion & Turn off RUN_TO_POSITION
             moveRobot(0, 0);
-            leftFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            rightFrontDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            motorLocations[0].setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            motorLocations[1].setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         }
     }
 
@@ -317,10 +301,10 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         telemetry.addData("Run Time (s):", "%5.1f", runtime.seconds());
         telemetry.addData("Heading Target:", "%5.0f", targetHeading);
         telemetry.addData("Heading Current:", "%5.0f", getHeading());
-        telemetry.addData("Front Left:", "%5.0f", leftBackPower*100);
-        telemetry.addData("Front Right:", "%5.0f", rightFrontPower*100);
-        telemetry.addData("Back  Left:", "%5.0f",  leftBackPower*100);
-        telemetry.addData("Back  Right:", "%5.0f", rightBackPower*100);
+        telemetry.addData("Front Left:", "%5.0f", wheelPower[0]*100);
+        telemetry.addData("Front Right:", "%5.0f", wheelPower[1]*100);
+        telemetry.addData("Back  Left:", "%5.0f",  wheelPower[2]*100);
+        telemetry.addData("Back  Right:", "%5.0f", wheelPower[3]*100);
         //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
         //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
