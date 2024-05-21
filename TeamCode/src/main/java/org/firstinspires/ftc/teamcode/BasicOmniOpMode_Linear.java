@@ -36,6 +36,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
+import com.qualcomm.robotcore.util.RobotLog;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
@@ -44,6 +45,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 //@Disabled
 public class BasicOmniOpMode_Linear extends LinearOpMode {
     private final ElapsedTime runtime = new ElapsedTime();
+
+    public static final String LoggingTag = "RRLogs";
 
     // Robot configuration
     private IMU     imu             = null;
@@ -106,6 +109,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
+        RobotLog.ii(LoggingTag, "Start the OpMode");
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
             double max;
@@ -159,9 +163,12 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             sendTelemetry();
         }
+        RobotLog.ii(LoggingTag, "End the OpMode");
     }
 
     private void turnToHeading(double heading) {
+        RobotLog.ii(LoggingTag, "turnToHeading(): %5.1f", heading);
+
         double maxTurnSpeed = MAX_TURN_SPEED;
 
         // Run getSteeringCorrection() once to pre-calculate the current error
@@ -186,6 +193,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
         // Stop all motion;
         moveRobot(0, 0);
+        RobotLog.ii(LoggingTag, "turnToHeading() end: current heading is %5.1f", getHeading());
     }
 
     public double getSteeringCorrection(double desiredHeading, double proportionalGain) {
@@ -291,6 +299,9 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
         //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
+
+        RobotLog.dd(LoggingTag, "Heading: Target/Current: %5.1f, %5.1f - Front Left/Right: %4.1f, %4.1f - Back  Left/Right: %4.1f, %4.1f",
+                targetHeading, getHeading(), leftFrontPower, rightFrontPower, leftBackPower, rightBackPower);
     }
 
     /**
