@@ -69,8 +69,6 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     // Execution variables
     private double  driveSpeed      = 0;
     private double  turnSpeed       = 0;
-    private int     leftTarget      = 0;
-    private int     rightTarget     = 0;
     private double  targetHeading   = 0;
     private double  headingError    = 0;
     private double  leftFrontPower  = 0;
@@ -122,8 +120,8 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             boolean dpad_down   = gamepad1.dpad_down;
             boolean dpad_left   = gamepad1.dpad_left;
             boolean dpad_right  = gamepad1.dpad_right;
-            boolean gamepad_a   = gamepad1.a;
-            boolean gamepad_b   = gamepad1.b;
+            // boolean gamepad_a   = gamepad1.a;
+            // boolean gamepad_b   = gamepad1.b;
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
@@ -251,8 +249,8 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             // Determine new target position, and pass to motor controller
             int moveCounts = (int)(distance * COUNTS_PER_INCH);
-            leftTarget = leftFrontDrive.getCurrentPosition() + moveCounts;
-            rightTarget = rightFrontDrive.getCurrentPosition() + moveCounts;
+            int leftTarget = leftFrontDrive.getCurrentPosition() + moveCounts;
+            int rightTarget = rightFrontDrive.getCurrentPosition() + moveCounts;
 
             // Set Target FIRST, then turn on RUN_TO_POSITION
             leftFrontDrive.setTargetPosition(leftTarget);
