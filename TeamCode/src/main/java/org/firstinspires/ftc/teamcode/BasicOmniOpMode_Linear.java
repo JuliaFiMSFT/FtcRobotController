@@ -29,6 +29,8 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.FtcDashboard;
+import com.acmerobotics.dashboard.config.Config;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -42,10 +44,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
 @TeleOp(name="Manual default driving", group="Linear OpMode")
+@Config
 //@Disabled
 public class BasicOmniOpMode_Linear extends LinearOpMode {
     private final ElapsedTime runtime = new ElapsedTime();
-
     public static final String LoggingTag = "RRLogs";
 
     // Robot configuration
@@ -55,16 +57,19 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private DcMotor rightFrontDrive = null;
     private DcMotor rightBackDrive  = null;
 
-    // Default values
-    static final double     P_DRIVE_GAIN            = 0.03;     // Larger is more responsive, but also less stable
-    static final double     P_TURN_GAIN             = 0.02;     // Larger is more responsive, but also less stable
-    static final double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
+    // Adjustable default values
+    public static double     MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
+    public static double     MAX_TURN_SPEED          = 0.8 ;     // Max Turn speed to limit turn rate
+    public static double     P_DRIVE_GAIN            = 0.03;     // Larger is more responsive, but also less stable
+    public static double     P_TURN_GAIN             = 0.02;     // Larger is more responsive, but also less stable
+    public static double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
+
+    // Hardware default values
     static final double     COUNTS_PER_MOTOR_REV    = 537.7 ;   // eg: GoBILDA 312 RPM Yellow Jacket
     static final double     DRIVE_GEAR_REDUCTION    = 1.0 ;     // No External Gearing.
     static final double     WHEEL_DIAMETER_INCHES   = 3.8 ;     // For figuring circumference
     static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) / (WHEEL_DIAMETER_INCHES * 3.1415);
-    static final double     MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
-    static final double     MAX_TURN_SPEED          = 0.8 ;     // Max Turn speed to limit turn rate
+
 
     // Execution variables
     private double  driveSpeed      = 0;
@@ -81,6 +86,9 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        FtcDashboard dashboard = FtcDashboard.getInstance();
+        telemetry = dashboard.getTelemetry();
+
         // Initialize the motor configuration
         leftFrontDrive = hardwareMap.get(DcMotor.class, "left_front_drive");
         leftBackDrive = hardwareMap.get(DcMotor.class, "left_back_drive");
@@ -290,10 +298,13 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
      *  Display the various control parameters while driving
      */
     private void sendTelemetry() {
-        telemetry.addData("Status", "Run Time: " + runtime);
-        telemetry.addData("Heading:  Target/Current", "%5.1f, %5.1f", targetHeading, getHeading());
-        telemetry.addData("Front Left/Right", "%4.1f, %4.1f", leftFrontPower, rightFrontPower);
-        telemetry.addData("Back  Left/Right", "%4.1f, %4.1f", leftBackPower, rightBackPower);
+        telemetry.addData("Run Time (s): ", "%5.1f", runtime.seconds());
+        telemetry.addData("Heading Target:", "%5.0f", targetHeading);
+        telemetry.addData("Heading Current:", "%5.0f", getHeading());
+        telemetry.addData("Front Left:", "%5.0f", leftBackPower*100);
+        telemetry.addData("Front Right:", "%5.0f", rightFrontPower*100);
+        telemetry.addData("Back  Left:", "%5.0f",  leftBackPower*100);
+        telemetry.addData("Back  Right:", "%5.0f", rightBackPower*100);
         //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
         //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
