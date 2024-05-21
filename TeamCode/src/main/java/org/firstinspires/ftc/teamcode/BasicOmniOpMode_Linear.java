@@ -38,7 +38,6 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
-import com.qualcomm.robotcore.util.RobotLog;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
@@ -48,7 +47,6 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 //@Disabled
 public class BasicOmniOpMode_Linear extends LinearOpMode {
     private final ElapsedTime runtime = new ElapsedTime();
-    public static final String LoggingTag = "RRLogs";
 
     // Robot configuration
     private IMU     imu             = null;
@@ -58,11 +56,12 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private DcMotor rightBackDrive  = null;
 
     // Adjustable default values
-    public static double     MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
-    public static double     MAX_TURN_SPEED          = 0.8 ;     // Max Turn speed to limit turn rate
-    public static double     P_DRIVE_GAIN            = 0.03;     // Larger is more responsive, but also less stable
-    public static double     P_TURN_GAIN             = 0.02;     // Larger is more responsive, but also less stable
-    public static double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
+    public static double    MAX_DRIVE_SPEED         = 0.8 ;     // Max driving speed for better distance accuracy.
+    public static double    MAX_TURN_SPEED          = 0.8 ;     // Max Turn speed to limit turn rate
+    public static double    P_DRIVE_GAIN            = 0.03;     // Larger is more responsive, but also less stable
+    public static double    P_TURN_GAIN             = 0.02;     // Larger is more responsive, but also less stable
+    public static double    HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
+    public static double    MAX_POWER_DIFFERENCE    = 0.05;
 
     // Hardware default values
     static final double     COUNTS_PER_MOTOR_REV    = 537.7 ;   // eg: GoBILDA 312 RPM Yellow Jacket
@@ -80,6 +79,10 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
     private double  rightFrontPower = 0;
     private double  leftBackPower   = 0;
     private double  rightBackPower  = 0;
+    private double  prevLeftFrontPower  = 0;
+    private double  prevRightFrontPower = 0;
+    private double  prevLeftBackPower   = 0;
+    private double  prevRightBackPower  = 0;
     double          axial           = 0;  // Note: pushing stick forward gives negative value
     double          lateral         = 0;
     double          yaw             = 0;
@@ -115,11 +118,8 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
-        RobotLog.ii(LoggingTag, "Start the OpMode");
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
-            double max;
-
             // Get values from the controller.
             axial   = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
             lateral =  gamepad1.left_stick_x;
@@ -128,8 +128,6 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             boolean dpad_down   = gamepad1.dpad_down;
             boolean dpad_left   = gamepad1.dpad_left;
             boolean dpad_right  = gamepad1.dpad_right;
-            // boolean gamepad_a   = gamepad1.a;
-            // boolean gamepad_b   = gamepad1.b;
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
@@ -138,18 +136,16 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
             leftBackPower   = axial - lateral + yaw;
             rightBackPower  = axial + lateral - yaw;
 
-            // Normalize the values so no wheel power exceeds 100%
-            // This ensures that the robot maintains the desired motion.
-            max = Math.max(Math.abs(leftFrontPower), Math.abs(rightFrontPower));
-            max = Math.max(max, Math.abs(leftBackPower));
-            max = Math.max(max, Math.abs(rightBackPower));
+            leftFrontPower = adjustPower(prevLeftFrontPower, leftFrontPower);
+            rightFrontPower = adjustPower(prevRightFrontPower, rightFrontPower);
+            leftBackPower = adjustPower(prevLeftBackPower, leftBackPower);
+            rightBackPower = adjustPower(prevRightBackPower, rightBackPower);
 
-            if (max > 1.0) {
-                leftFrontPower  /= max;
-                rightFrontPower /= max;
-                leftBackPower   /= max;
-                rightBackPower  /= max;
-            }
+            // Save the current power level for the next loop
+            prevLeftFrontPower = leftFrontPower;
+            prevRightFrontPower = rightFrontPower;
+            prevLeftBackPower = leftBackPower;
+            prevRightBackPower = rightBackPower;
 
             // Send calculated power to wheels
             leftFrontDrive.setPower(leftFrontPower);
@@ -169,12 +165,32 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
             sendTelemetry();
         }
-        RobotLog.ii(LoggingTag, "End the OpMode");
+        telemetry.addLine("End the OpMode");
+    }
+
+    // Function to gradually adjust current power towards target power
+    private double adjustPower(double currentPower, double targetPower) {
+        if (currentPower < targetPower) {
+            currentPower += MAX_POWER_DIFFERENCE;
+            if (currentPower > targetPower) {
+                currentPower = targetPower;
+            }
+        } else if (currentPower > targetPower) {
+            currentPower -= MAX_POWER_DIFFERENCE;
+            if (currentPower < targetPower) {
+                currentPower = targetPower;
+            }
+        }
+
+        // If the power is greater than 1, set it to 1
+        if(currentPower > 1.0)
+            currentPower = 1.0;
+
+        return currentPower;
     }
 
     private void turnToHeading(double heading) {
-        RobotLog.ii(LoggingTag, "turnToHeading(): %5.1f", heading);
-
+        telemetry.addData("TurnToHeading():", "%5.0f", heading);
         double maxTurnSpeed = MAX_TURN_SPEED;
 
         // Run getSteeringCorrection() once to pre-calculate the current error
@@ -199,7 +215,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
 
         // Stop all motion;
         moveRobot(0, 0);
-        RobotLog.ii(LoggingTag, "turnToHeading() end: current heading is %5.1f", getHeading());
+        telemetry.addData("TurnToHeading() end:", "%5.0f", getHeading());
     }
 
     public double getSteeringCorrection(double desiredHeading, double proportionalGain) {
@@ -298,7 +314,7 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
      *  Display the various control parameters while driving
      */
     private void sendTelemetry() {
-        telemetry.addData("Run Time (s): ", "%5.1f", runtime.seconds());
+        telemetry.addData("Run Time (s):", "%5.1f", runtime.seconds());
         telemetry.addData("Heading Target:", "%5.0f", targetHeading);
         telemetry.addData("Heading Current:", "%5.0f", getHeading());
         telemetry.addData("Front Left:", "%5.0f", leftBackPower*100);
@@ -308,9 +324,6 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
         //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
         //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
-
-        RobotLog.dd(LoggingTag, "Heading: Target/Current: %5.1f, %5.1f - Front Left/Right: %4.1f, %4.1f - Back  Left/Right: %4.1f, %4.1f",
-                targetHeading, getHeading(), leftFrontPower, rightFrontPower, leftBackPower, rightBackPower);
     }
 
     /**
