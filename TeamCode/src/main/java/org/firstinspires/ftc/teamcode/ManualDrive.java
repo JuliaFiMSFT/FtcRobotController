@@ -1,4 +1,4 @@
-M/* Copyright (c) 2021 FIRST. All rights reserved.
+/* Copyright (c) 2021 FIRST. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
  * are permitted (subject to the limitations in the disclaimer below) provided that
@@ -46,7 +46,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 @TeleOp(name="Manual default driving", group="Linear OpMode")
 @Config
 //@Disabled
-public class BasicOmniOpMode_Linear extends LinearOpMode {
+public class ManualDrive extends LinearOpMode {
     private final ElapsedTime runtime = new ElapsedTime();
     public static final String LoggingTag = "RRLogs";
 
@@ -298,13 +298,13 @@ public class BasicOmniOpMode_Linear extends LinearOpMode {
      *  Display the various control parameters while driving
      */
     private void sendTelemetry() {
-        telemetry.addData("Run Time (s): ", "%5.1f", runtime.seconds());
-        telemetry.addData("Heading Target:", "%5.0f", targetHeading);
-        telemetry.addData("Heading Current:", "%5.0f", getHeading());
-        telemetry.addData("Front Left:", "%5.0f", leftBackPower*100);
-        telemetry.addData("Front Right:", "%5.0f", rightFrontPower*100);
-        telemetry.addData("Back  Left:", "%5.0f",  leftBackPower*100);
-        telemetry.addData("Back  Right:", "%5.0f", rightBackPower*100);
+        telemetry.addData("Run Time (s)", "%5.1f", runtime.seconds());
+        telemetry.addData("Heading Target", "%5.0f", targetHeading);
+        telemetry.addData("Heading Current", "%5.0f", getHeading());
+        telemetry.addData("Front Left", "%5.0f", leftBackPower*100);
+        telemetry.addData("Front Right", "%5.0f", rightFrontPower*100);
+        telemetry.addData("Back  Left", "%5.0f",  leftBackPower*100);
+        telemetry.addData("Back  Right", "%5.0f", rightBackPower*100);
         //telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
         //telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftFrontDrive.getCurrentPosition(), rightFrontDrive.getCurrentPosition());
         telemetry.update();
